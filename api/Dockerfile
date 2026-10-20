@@ -18,6 +18,10 @@ COPY api/ api/
 WORKDIR /app/api
 EXPOSE 4000
 
+# M8 (A02, Trivy DS-0002): processen kör inte som root. node-imagen har användaren `node` färdig.
+# Allt är redan kopierat och installerat ovanför – node behöver bara läsa.
+USER node
+
 # M6: commiten imagen byggdes från. Pipelinen skickar in den (build-args), lokalt blir det "dev".
 # Syns i /api/health som `sha` – det är så deploysteget vet att molnet kör rätt version.
 ARG GIT_SHA=dev
