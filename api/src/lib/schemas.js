@@ -14,6 +14,9 @@ export const registerSchema = z.object({
   email: z.email().max(254),
   password: z.string().min(8, 'minst 8 tecken').max(200),
   displayName: z.string().trim().min(1).max(80),
+  // M8 (A01, hålsjakten H3): ingen `role` här. Den som registrerar sig bestämmer inte sin egen roll –
+  // Zod tar bort okända fält, så `role: 'editor'` i bodyn försvinner och kontot blir member
+  // (databasens default). Redaktörer utses av någon som redan är redaktör, inte av formuläret.
 });
 
 export const createTourSchema = z.object({
@@ -23,6 +26,14 @@ export const createTourSchema = z.object({
   distanceM: z.coerce.number().int().min(0).max(1_000_000),
   notes: z.string().max(2000).optional().nullable(),
 });
+
+// PATCH /api/tours/:id – byt titel eller anteckningar på en tur i efterhand (önskemål från appen).
+export const updateTourSchema = z
+  .object({
+    title: z.string().trim().min(1).max(120).optional(),
+    notes: z.string().max(2000).optional().nullable(),
+  })
+  .refine((v) => v.title !== undefined || v.notes !== undefined, { message: 'title eller notes krävs' });
 
 // POST /api/photos (M7): bara mått och filnamn – bytes skickas inte. Taket 20 000 px på varje
 // sida matchar funktionens egen gräns (50 MP): en begäran om en bild på 10 miljarder pixlar ska

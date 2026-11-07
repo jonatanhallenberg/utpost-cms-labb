@@ -8,6 +8,9 @@ import { pool } from './db/client.js';
 import { seed } from './db/seed.js';
 import { migrateLogs } from './db/migrate-logs.js';
 import { mongo } from './db/mongo.js';
+import { assertJwtSecret } from './config.js';
+
+assertJwtSecret(); // M8 (H4): före seeden – en container utan JWT_SECRET ska dö direkt, inte efter en minut
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 

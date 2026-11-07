@@ -5,6 +5,7 @@ import { wrap } from '../lib/wrap.js';
 import { validate } from '../lib/validate.js';
 import { searchSchema, guideUpdateSchema, idParam } from '../lib/schemas.js';
 import { requireUser, requireRole } from '../lib/auth.js';
+import { sanitizeGuideHtml } from '../lib/html.js';
 
 export const guidesRouter = Router();
 
@@ -75,7 +76,8 @@ guidesRouter.put(
     const result = await pool.query<Guide>(
       `update guides set title=$1, region=$2, difficulty=$3, length_km=$4, body_html=$5,
        published=$6, updated_at=now() where id=$7 returning *`,
-      [title, region, difficulty, lengthKm, bodyHtml, published, id.data],
+      // M8 (H7): bodyn saneras innan den sparas – den renderas med v-html (lib/html.js)
+      [title, region, difficulty, lengthKm, sanitizeGuideHtml(bodyHtml), published, id.data],
     );
     if (!result.rows[0]) return res.status(404).json({ error: 'hittades inte' });
     res.json(result.rows[0]);

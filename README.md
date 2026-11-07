@@ -58,7 +58,7 @@ npm run dev:client                    # Vue-klienten på :3001 med hot reload, /
 
 ## Konfiguration och hemligheter (M6)
 
-Allt som skiljer en miljö från en annan kommer från miljövariabler – se `.env.example`. Koden har standardvärden för lokal utveckling, compose sätter sina, och i molnet sätts de i plattformen. Hemligheter (`JWT_SECRET`, databasadresserna med lösenord) ligger i plattformens *secrets* och refereras från variablerna – de finns inte i någon fil som committas. `client`-imagen läser `API_UPSTREAM` när den startar (nginx-mallen `client/nginx.conf.template`), så samma image fungerar i compose (`api:4000`) och i Azure (`localhost:4000`).
+Allt som skiljer en miljö från en annan kommer från miljövariabler – se `.env.example`. Koden har standardvärden för lokal utveckling (utom `JWT_SECRET`, som alltid måste sättas – kopiera `.env.example` till `.env` och generera värdet med `openssl rand -hex 32`; `npm run dev:api` och compose läser `.env`), compose sätter sina, och i molnet sätts de i plattformen. Hemligheter (`JWT_SECRET`, databasadresserna med lösenord) ligger i plattformens *secrets* och refereras från variablerna – de finns inte i någon fil som committas. `client`-imagen läser `API_UPSTREAM` när den startar (nginx-mallen `client/nginx.conf.template`), så samma image fungerar i compose (`api:4000`) och i Azure (`localhost:4000`).
 
 `/api/health` svarar med `sha` – commiten imagen byggdes från (`GIT_SHA`, satt av pipelinen). Så vet man vilken version som kör, och det är så deploysteget vet att molnet har bytt.
 

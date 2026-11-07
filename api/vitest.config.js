@@ -1,3 +1,4 @@
+import { randomBytes } from 'node:crypto';
 import { defineConfig } from 'vitest/config';
 
 // M5: integrationstester mot GraphQL-servern. Körs i Node (ingen jsdom), mot en RIKTIG databas:
@@ -14,5 +15,8 @@ export default defineConfig({
     // Testerna delar databas – kör filerna efter varandra, inte parallellt.
     fileParallelism: false,
     testTimeout: 10000,
+    // M8 (H4): API:et har inget reservvärde för JWT_SECRET längre. Testerna får en slumpad hemlighet
+    // per körning (om ingen är satt) – aldrig ett värde som står i repot.
+    env: { JWT_SECRET: process.env.JWT_SECRET || randomBytes(32).toString('hex') },
   },
 });

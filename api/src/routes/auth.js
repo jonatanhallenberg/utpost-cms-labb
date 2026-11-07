@@ -29,6 +29,7 @@ authRouter.post(
   '/register',
   validate(registerSchema),
   wrap(async (req, res) => {
+    // M8 (A01, H3): rollen läses aldrig ur bodyn – nya konton får databasens default (member).
     const { email, password, displayName } = req.body;
     const exists = await pool.query('select 1 from users where email = $1', [email]);
     if (exists.rows[0]) return res.status(409).json({ error: 'e-postadressen används redan' });

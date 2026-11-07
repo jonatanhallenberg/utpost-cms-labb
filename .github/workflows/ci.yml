@@ -121,7 +121,8 @@ jobs:
 
       # Hela appen startas som i compose – det är den ZAP ska anropa, och api-imagen som Trivy ska skanna.
       - name: Bygg imagerna och starta appen (compose)
-        run: docker compose up -d --build --wait
+        # M8 (H4): API:et startar inte utan JWT_SECRET – en slumpad hemlighet för jobbet, aldrig ett värde i repot.
+        run: JWT_SECRET="$(openssl rand -hex 32)" docker compose up -d --build --wait
 
       - name: "Imagen – Trivy (api-imagen: Alpine-paket, Node, npm-paket)"
         uses: aquasecurity/trivy-action@v0.36.0

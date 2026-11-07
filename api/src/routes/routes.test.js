@@ -3,6 +3,7 @@ import { app } from '../app.js';
 import { pool } from '../db/client.js';
 import { mongo } from '../db/mongo.js';
 import { sign } from '../lib/auth.js';
+import jwt from 'jsonwebtoken';
 
 // M8 (skuld 9): säkerhetstester mot REST-API:et, mot riktig databas – samma upplägg som
 // GraphQL-testerna i graphql/server.test.js (lokalt mot compose-databaserna, i pipelinen mot
@@ -197,5 +198,95 @@ describe('Validering av indata – A10 Mishandling of Exceptional Conditions', (
     });
     expect(res.status).toBe(400);
     expect(await res.json()).toEqual({ error: 'ogiltig JSON' });
+  });
+});
+
+// Fredagens hålsjakt: H1 (PUT /api/guides/:id utan auth) testas ovan under "redaktionens routes".
+// H2–H7 här – varje test var rött mot security-labb-start och är grönt efter fixen.
+describe('Hålsjakten – H2–H7 (fredagens labb)', () => {
+  it('H2 (A01): en medlem kan inte ändra någon annans tur med PATCH (403) – ägaren kan', async () => {
+    const tour = (await pool.query('select id, user_id, title from tours where id = 1')).rows[0];
+    const other = (
+      await pool.query("select id, email, role from users where id <> $1 and role = 'member' limit 1", [tour.user_id])
+    ).rows[0];
+    const res = await api(`/api/tours/${tour.id}`, { method: 'PATCH', token: sign(other), body: { title: 'Kapad tur' } });
+    expect(res.status).toBe(403);
+    expect((await pool.query('select title from tours where id = 1')).rows[0].title).toBe(tour.title);
+
+    const owner = await userRow(tour.user_id);
+    const egen = await api(`/api/tours/${tour.id}`, { method: 'PATCH', token: sign(owner), body: { title: tour.title } });
+    expect(egen.status).toBe(200);
+  });
+
+  it('H3 (A01): role i registreringen ignoreras – nya konton blir member', async () => {
+    const email = `ny.${Date.now()}@example.com`;
+    try {
+      const res = await api('/api/auth/register', {
+        method: 'POST',
+        body: { email, password: 'langtlosen123', displayName: 'Ny', role: 'editor' },
+      });
+      expect(res.status).toBe(201);
+      const svar = await res.json();
+      expect(svar.user.role).toBe('member');
+      expect(jwt.decode(svar.token).role).toBe('member');
+    } finally {
+      await pool.query('delete from users where email = $1', [email]);
+    }
+  });
+
+  it('H4 (A04/A07): en token signerad med det gamla fasta värdet ur .env.example ger 401', async () => {
+    const forfalskad = jwt.sign({ id: 1, email: 'redaktor@utpost.se', role: 'editor' }, 'utpost-dev-secret-byt-i-molnet', {
+      algorithm: 'HS256',
+      expiresIn: '1h',
+    });
+    const res = await api('/api/auth/me', { token: forfalskad });
+    expect(res.status).toBe(401);
+  });
+
+  it('H5 (A01): GET /api/users kräver inloggning (401) och rollen editor (403)', async () => {
+    const utan = await api('/api/users');
+    expect(utan.status).toBe(401);
+    expect(await utan.text()).not.toContain('@');
+    const member = (await pool.query("select id, email, role from users where role = 'member' limit 1")).rows[0];
+    expect((await api('/api/users', { token: sign(member) })).status).toBe(403);
+    const editor = (await pool.query("select id, email, role from users where role = 'editor' limit 1")).rows[0];
+    expect((await api('/api/users', { token: sign(editor) })).status).toBe(200);
+  });
+
+  it('H6 (A02): ett 500-fel svarar utan stack – detaljerna står i loggen', async () => {
+    // Ett id som är ett heltal men för stort för Postgres integer: valideringen släpper igenom det,
+    // databasen kastar (out of range) – och felhanteraren svarar 500.
+    const res = await api('/api/tours/99999999999');
+    expect(res.status).toBe(500);
+    const svar = await res.json();
+    expect(svar).toEqual({ error: 'internt fel' });
+    expect(JSON.stringify(svar)).not.toContain('node_modules');
+  });
+
+  it('H7 (A05, XSS): bodyHtml saneras när guiden sparas – <script> och onerror överlever inte', async () => {
+    const editor = (await pool.query("select id, email, role from users where role = 'editor' limit 1")).rows[0];
+    const before = (await pool.query('select * from guides where id = 1')).rows[0];
+    try {
+      const res = await api('/api/guides/1', {
+        method: 'PUT',
+        token: sign(editor),
+        body: {
+          title: before.title,
+          region: before.region,
+          difficulty: before.difficulty,
+          lengthKm: before.length_km,
+          bodyHtml: '<p>Hej</p><script>alert(1)</script><img src="x" onerror="alert(document.domain)"><a href="javascript:alert(1)">länk</a>',
+          published: before.published,
+        },
+      });
+      expect(res.status).toBe(200);
+      const html = (await pool.query('select body_html from guides where id = 1')).rows[0].body_html;
+      expect(html).toContain('<p>Hej</p>');
+      expect(html).not.toContain('<script');
+      expect(html).not.toContain('onerror');
+      expect(html).not.toContain('javascript:');
+    } finally {
+      await pool.query('update guides set body_html = $1 where id = 1', [before.body_html]);
+    }
   });
 });

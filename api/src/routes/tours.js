@@ -3,7 +3,7 @@ import { pool } from '../db/client.js';
 import { requireUser } from '../lib/auth.js';
 import { wrap } from '../lib/wrap.js';
 import { validate } from '../lib/validate.js';
-import { createTourSchema, idParam } from '../lib/schemas.js';
+import { createTourSchema, updateTourSchema, idParam } from '../lib/schemas.js';
 
 export const toursRouter = Router();
 
@@ -60,6 +60,33 @@ toursRouter.post(
       [req.user.id, guideId ?? null, title, startedAt, distanceM, notes ?? null],
     );
     res.status(201).json(result.rows[0]);
+  }),
+);
+
+// Redigera titel och anteckningar i efterhand.
+// M8 (A01, hålsjakten H2): inloggad räckte inte – vem som helst med ett konto kunde byta titel på
+// vilken tur som helst (att appen bara visar knappen på ens egna turer skyddar ingenting). Samma
+// ägarkontroll som DELETE: mot raden i databasen, 403 om turen inte är din och du inte är redaktör.
+toursRouter.patch(
+  '/:id',
+  requireUser,
+  validate(updateTourSchema),
+  wrap(async (req, res) => {
+    const id = idParam.safeParse(req.params.id);
+    if (!id.success) return res.status(400).json({ error: 'ogiltigt id' });
+    const tour = await pool.query('select id, user_id from tours where id = $1', [id.data]);
+    if (!tour.rows[0]) return res.status(404).json({ error: 'hittades inte' });
+    if (tour.rows[0].user_id !== req.user.id && req.user.role !== 'editor') {
+      return res.status(403).json({ error: 'inte din tur' });
+    }
+    const { title, notes } = req.body;
+    const result = await pool.query(
+      `update tours set title = coalesce($1, title), notes = case when $2::boolean then $3 else notes end
+       where id = $4 returning *`,
+      [title ?? null, notes !== undefined, notes ?? null, id.data],
+    );
+    if (!result.rows[0]) return res.status(404).json({ error: 'hittades inte' });
+    res.json(result.rows[0]);
   }),
 );
 
