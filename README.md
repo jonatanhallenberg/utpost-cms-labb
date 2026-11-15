@@ -46,6 +46,7 @@ npm run dev:client                    # Vue-klienten på :3001 med hot reload, /
     npm run dev:client        # Vue-klienten på :3001 (API:et måste köra: npm run dev:api)
     npm run dev:functions     # bildfunktionen med func start på :7071 (M7) – kräver Core Tools och functions/node_modules
     npm run mat               # mätskriptet: 10 samtidiga uppladdningar à 4000x3000 mot :4000 (npm run mat -- --n 20)
+    npm run cms:setup         # M9: skapar innehållstypen Notis och tre notiser i ert Contentful-space (kräver space-id och CMA-token i .env)
     npm run lint              # ESLint på client/
     npm run format:check      # Prettier – bara kontroll, ändrar inget
     npm run codegen           # typer ur GraphQL-schemat → client/src/gql/ (körs av typecheck)
@@ -95,6 +96,20 @@ Skuld 9 var *öppna endpoints, ingen validering av indata, strängkonkatenerade 
 Checklistan: `docs/security.md`.
 
 **Säkerhetsskanning i pipelinen (fredagens labb, M8):** jobbet *Säkerhet* i `ci.yml` kör på varje PR: `npm audit` (beroenden med kända sårbarheter), Trivy mot repot (beroenden, hemligheter, Dockerfiles) och mot api-imagen, och ZAP baseline mot den körande appen (saknade säkerhetsheaders, läckt serverinfo). `security-headers.conf` sätter CSP och de andra headrarna i varje nginx-location; `.trivyignore` och `.zap/rules.tsv` säger vad som är ett stopp och vad som är ett medvetet undantag. API:et har ingen CORS längre – browsern når det genom nginx eller Vites proxy, från samma origin.
+
+## Innehållet ut ur databasen (M9)
+
+Redaktionens **notiser** bor i ett headless CMS (Contentful), inte i Postgres. Redaktören skriver och publicerar i Contentfuls webbapp, utan utvecklare och utan deploy.
+
+- **Bakom API:et.** Klienten frågar vårt eget GraphQL-API som förut (`notices`, och `notices` på varje `Guide`). Resolvern hämtar från CMS:et och formar om svaret till schemat. `api/src/cms/contentful.js` är det enda stället som vet vilket CMS det är.
+- **Rich text som data.** Brödtexten kommer som stycken av textbitar, inte som en HTML-sträng. `client/src/components/RichText.vue` gör element av dem. Ingen `v-html`.
+- **Två tillstånd, två nycklar.** Delivery-nyckeln ser bara publicerat. Preview-nyckeln ser även utkast och används bara när en inloggad redaktör (rollen `editor`) slår på *Förhandsgranska* på startsidan. Båda nycklarna ligger i `.env` på servern.
+- **Cache.** Publicerade notiser svaras ur minnet i en minut (`CMS_CACHE_SECONDS`). En publicering syns alltså efter upp till en minut.
+- **Utan CMS.** Saknas space-id och nyckel kör appen utan notiser. Så kör testerna i pipelinen.
+
+Sätt upp ett eget space: skapa ett konto och ett tomt space på contentful.com, fyll i `CONTENTFUL_SPACE_ID` och `CONTENTFUL_MANAGEMENT_TOKEN` i `.env` (se `.env.example`) och kör `npm run cms:setup`. Skriptet skapar innehållstypen *Notis* och tre notiser, varav en som utkast. Lägg sedan in delivery- och preview-nyckeln och starta om API:et.
+
+Guiderna ligger kvar i databasen som `body_html` (skuld 10). Att flytta dem är M9. Beslutsdokumentet: `docs/decisions/cms.md`.
 
 ## I molnet (M6)
 

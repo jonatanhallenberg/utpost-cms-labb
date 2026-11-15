@@ -3,6 +3,7 @@ import { computed } from 'vue'
 import { useRoute } from 'vue-router'
 import { useQuery } from '@urql/vue'
 import { graphql } from '../gql'
+import NoticeList from '../components/NoticeList.vue'
 
 // Detaljvyn: frågan tar en variabel ($slug) i stället för att klistra in adressen i strängen.
 // Codegen genererar typen för variablerna också – skicka fel typ, och typecheck säger ifrån.
@@ -15,6 +16,20 @@ const GuideDocument = graphql(/* GraphQL */ `
       difficulty
       lengthKm
       bodyHtml
+      notices {
+        id
+        title
+        level
+        status
+        body {
+          runs {
+            text
+            bold
+            italic
+            href
+          }
+        }
+      }
     }
   }
 `)
@@ -34,6 +49,8 @@ const { data, fetching, error } = useQuery({ query: GuideDocument, variables })
     <p class="muted">
       {{ data.guide.region }} · {{ data.guide.difficulty }} · {{ data.guide.lengthKm }} km
     </p>
+    <!-- M9: notiserna för den här guiden kommer ur CMS:et, som data. Jämför med raden under. -->
+    <NoticeList :notices="data.guide.notices" />
     <!-- Redaktionens HTML ur databasen (skuld 10). Rå HTML från servern – flyttar till CMS i M9. -->
     <!-- eslint-disable-next-line vue/no-v-html -->
     <div class="body" v-html="data.guide.bodyHtml"></div>

@@ -1,4 +1,5 @@
 import { createClient, cacheExchange, fetchExchange } from '@urql/vue'
+import { getToken } from './lib/token'
 
 // M5: GraphQL-klienten. Ersätter gql() från M4 (ett fetch per anrop, ingen cache).
 // Relativ adress som förut: nginx i containern och Vites dev-server skickar /graphql vidare till API:et.
@@ -14,4 +15,10 @@ export const client = createClient({
   // urql skickar annars korta frågor som GET med frågan i adressen. Vi håller oss till POST,
   // som i M4: en metod, en adress, frågan i bodyn – och GET /graphql i browsern är fortfarande GraphiQL.
   preferGetMethod: false,
+  // M9: redaktionens förhandsgranskning kräver inloggning. Token följer med varje GraphQL-anrop,
+  // samma Bearer som i api.ts. Utan token är anropet anonymt, precis som förut.
+  fetchOptions: () => {
+    const token = getToken()
+    return token ? { headers: { Authorization: `Bearer ${token}` } } : {}
+  },
 })

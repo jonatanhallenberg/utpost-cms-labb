@@ -1,12 +1,30 @@
 <script setup lang="ts">
+import { computed, ref } from 'vue'
 import { useQuery } from '@urql/vue'
 import { graphql } from '../gql'
+import { useAuthStore } from '../stores/auth'
+import NoticeList from '../components/NoticeList.vue'
 
 // Startsidan: EN fråga som ber om exakt de fält mallen nedan visar (skuld 6).
 // M5: frågan skrivs i graphql(`…`) så att codegen ser den. Typen på svaret genereras ur schemat –
 // ta bort ett fält ur frågan, och mallen som använder det blir ett typfel i npm run typecheck.
 const HomeDocument = graphql(/* GraphQL */ `
-  query Home {
+  query Home($preview: Boolean) {
+    notices(preview: $preview) {
+      id
+      title
+      level
+      status
+      guideSlug
+      body {
+        runs {
+          text
+          bold
+          italic
+          href
+        }
+      }
+    }
     guides {
       slug
       title
@@ -30,7 +48,17 @@ const HomeDocument = graphql(/* GraphQL */ `
 
 // useQuery kör frågan när vyn skapas och ger tre refs: data, fetching och error.
 // Andra gången vyn visas svarar cachen (urql.ts) – inget nätverksanrop.
-const { data, fetching, error } = useQuery({ query: HomeDocument })
+//
+// M9: notiserna ligger i samma fråga – för klienten är de bara ett fält till, fast de kommer ur
+// CMS:et. Redaktören kan slå på förhandsgranskningen: då skickas preview: true, API:et kontrollerar
+// rollen och svarar med utkasten också. I det läget hämtas alltid färskt, aldrig ur cachen.
+const auth = useAuthStore()
+const isEditor = computed(() => auth.user?.role === 'editor')
+const showDrafts = ref(false)
+const preview = computed(() => isEditor.value && showDrafts.value)
+const variables = computed(() => ({ preview: preview.value }))
+const requestPolicy = computed(() => (preview.value ? 'network-only' : 'cache-first'))
+const { data, fetching, error } = useQuery({ query: HomeDocument, variables, requestPolicy })
 </script>
 
 <template>
@@ -41,6 +69,11 @@ const { data, fetching, error } = useQuery({ query: HomeDocument })
       <h1>Hitta din nästa tur</h1>
       <p>{{ data.guides.length }} guider i {{ data.regions.length }} landskap.</p>
     </section>
+
+    <label v-if="isEditor" class="muted">
+      <input v-model="showDrafts" type="checkbox" /> Förhandsgranska: visa utkast
+    </label>
+    <NoticeList :notices="data.notices" />
 
     <h2>Populärast just nu</h2>
     <ul class="list">
