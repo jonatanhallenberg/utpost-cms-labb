@@ -66,13 +66,12 @@ const toNotice = (entry, status = 'published') => ({
 // några gånger i veckan – inte 50 gånger i sekunden. Därför hämtar vi högst en gång i minuten och
 // svarar ur minnet däremellan. Priset: en publicerad ändring syns efter upp till en minut.
 let cache = { at: 0, notices: null };
+let pending = null; // anropet till Contentful som pågår just nu, om något gör det
 export const clearCmsCache = () => {
   cache = { at: 0, notices: null };
 };
 
-export const publishedNotices = async () => {
-  if (!cmsConfigured()) return [];
-  if (cache.notices && Date.now() - cache.at < config.cmsCacheSeconds * 1000) return cache.notices;
+const fetchNotices = async () => {
   try {
     const notices = (await entries('notis')).map((entry) => toNotice(entry));
     console.log(`cms: hämtade ${notices.length} publicerade notiser från Contentful`);
@@ -84,6 +83,18 @@ export const publishedNotices = async () => {
     console.error(`cms: kunde inte hämta notiser (${err.message}) – svarar med ${cache.notices ? 'det senast hämtade' : 'en tom lista'}`);
     return cache.notices ?? [];
   }
+};
+
+export const publishedNotices = async () => {
+  if (!cmsConfigured()) return [];
+  if (cache.notices && Date.now() - cache.at < config.cmsCacheSeconds * 1000) return cache.notices;
+  // En lista med 40 guider frågar efter notiser 40 gånger på samma gång (Guide.notices). Med kall
+  // cache ska det bli ETT anrop till Contentful, inte 40: alla som frågar medan anropet pågår
+  // väntar på samma svar.
+  pending ??= fetchNotices().finally(() => {
+    pending = null;
+  });
+  return pending;
 };
 
 // Förhandsgranskningen: preview-API:et ger senaste versionen av allt. Vi hämtar det publicerade

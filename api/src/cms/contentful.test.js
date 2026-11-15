@@ -88,6 +88,14 @@ describe('publicerade notiser', () => {
     expect(fetch).toHaveBeenCalledTimes(1);
   });
 
+  it('40 frågor på samma gång med kall cache delar på ett anrop (en lista med guider och deras notiser)', async () => {
+    const fetch = fakeContentful([avstangd]);
+    vi.stubGlobal('fetch', fetch);
+    const svar = await Promise.all(Array.from({ length: 40 }, () => publishedNotices()));
+    expect(fetch).toHaveBeenCalledTimes(1);
+    expect(svar.every((notices) => notices.length === 1)).toBe(true);
+  });
+
   it('är CMS:et nere svarar vi med det senast hämtade, eller en tom lista – aldrig ett fel', async () => {
     vi.spyOn(console, 'error').mockImplementation(() => {});
     const nere = vi.fn(async () => ({ ok: false, status: 503, json: async () => ({}) }));
